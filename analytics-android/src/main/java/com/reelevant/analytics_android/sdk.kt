@@ -7,6 +7,9 @@ import android.provider.Settings.Secure
 import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -37,7 +40,14 @@ class Configuration(var companyId: String, var endpoint: String) {
 
 class Event(val name: String, val payload: Map<String, Any>)
 
-class ReelevantSDK(private var context: Context, companyId: String, datasourceId: String) {
+class ReelevantSDK(
+    private var context: Context,
+    companyId: String,
+    datasourceId: String,
+    private val runnerUrl: String = DEFAULT_RUNNER_URL,
+    private val personalizationTimeout: Long = DEFAULT_TIMEOUT,
+    private val fallback: FallbackStrategy = FallbackStrategy.Empty
+) {
     private val sharedPreferencesId = "reelevant-analytics"
     private val configuration: Configuration = Configuration(
         companyId,
@@ -331,6 +341,60 @@ class ReelevantSDK(private var context: Context, companyId: String, datasourceId
         }
         ReelevantLogger.debug("Unable to collect advertising ID from Amazon Fire OS and Google Play Services.")
         return this.randomIdentifier()
+    }
+
+    // ---------------------------------------------------------------------------
+    // Personalization API
+    // ---------------------------------------------------------------------------
+
+    /**
+    Execute a single workflow run.
+    Returns a typed RunResult with a discriminated `body` union.
+    userId is auto-resolved from stored identity (setUser / tmpId) unless overridden in options.
+     */
+    suspend fun run(options: RunOptions): RunResult {
+        try {
+            val effectiveUserId = options.userId ?: resolveUserId()
+            val result = executeRunnerCall(options, runnerUrl, personalizationTimeout, effectiveUserId)
+            return result
+        } catch (e: Exception) {
+            return handleRunError(options, e)
+        }
+    }
+
+    /**
+    Execute multiple workflow runs in parallel.
+    Returns results in the same order as the input options.
+     */
+    suspend fun runAll(optionsList: List<RunOptions>): List<RunResult> {
+        return coroutineScope {
+            optionsList.map { opts -> async { run(opts) } }.awaitAll()
+        }
+    }
+
+    private suspend fun resolveUserId(): String {
+        val sharedPreferences =
+            this.context.getSharedPreferences(this.sharedPreferencesId, Context.MODE_PRIVATE)
+        return sharedPreferences.getString(ReelevantAnalytics.USER_ID, null)
+            ?: this.getTemporaryUserId()
+    }
+
+    private suspend fun handleRunError(options: RunOptions, err: Exception): RunResult {
+        return when (fallback) {
+            is FallbackStrategy.Error -> throw err
+            is FallbackStrategy.Custom -> fallback.handler(options, err)
+            is FallbackStrategy.Empty -> RunResult(
+                status = 0,
+                source = RunSource.FALLBACK,
+                body = RunContent.Empty,
+                metadata = emptyMap(),
+                properties = emptyMap(),
+                runId = null,
+                executionPath = emptyList(),
+                redirectionUrl = "",
+                onTrackClick = {}
+            )
+        }
     }
 
     private suspend fun getTemporaryUserId(): String {
