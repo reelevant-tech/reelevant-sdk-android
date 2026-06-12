@@ -170,7 +170,7 @@ private fun buildRunnerUrl(
     val base = "$runnerUrl/${options.workflowId}/${options.entrypoint}"
     val params = mutableListOf("rlvt-u=${enc(userId)}")
     options.locale?.let { params.add("locale=${enc(it)}") }
-    options.params?.forEach { (k, v) -> params.add("${enc(k)}=${enc(v)}") }
+    options.params?.forEach { (k, v) -> if (k != "rlvt-u") params.add("${enc(k)}=${enc(v)}") }
     return "$base?${params.joinToString("&")}"
 }
 
