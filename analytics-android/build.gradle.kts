@@ -59,7 +59,7 @@ publishing {
     }
     repositories {
         maven {
-            url = uri("https://maven.pkg.github.com/reelevant-tech/analytics-android")
+            url = uri("https://maven.pkg.github.com/reelevant-tech/reelevant-sdk-android")
             credentials {
                 username = System.getenv("GITHUB_ACTOR")
                 password = System.getenv("GITHUB_TOKEN")
