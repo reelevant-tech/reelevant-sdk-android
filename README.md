@@ -2,6 +2,8 @@
 
 Analytics tracking **and** real-time personalisation for Android apps, powered by Reelevant.
 
+📖 **[Full documentation](https://docs.reelevant.com/platform-guide/omni-channels/mobile/sdk/android)**
+
 ## How to use
 
 You need a `companyId` and `datasourceId` to initialise the SDK:
